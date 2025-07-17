@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Panel de Administración</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f8f9fa;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 30px auto;
+    }
+
+    .section-title {
+      margin-top: 30px;
+      margin-bottom: 15px;
+    }
+
+    .logout {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2 class="text-primary">Panel de Administración</h2>
+  <a href="/logout" class="btn btn-danger btn-sm logout">Cerrar sesión</a>
+
+  <!-- Sección 1: Usuarios -->
+  <div class="section-title">
+    <h4>Usuarios Registrados</h4>
+  </div>
+  <table class="table table-hover table-bordered">
+    <thead class="table-light">
+      <tr>
+        <th>ID</th>
+        <th>Nombre</th>
+        <th>Correo</th>
+        <th>Rol</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody id="tabla-usuarios">
+      <!-- Datos se llenan dinámicamente -->
+    </tbody>
+  </table>
+
+  <!-- Sección 2: Actividad -->
+  <div class="section-title">
+    <h4>Actividad de Usuarios</h4>
+  </div>
+  <table class="table table-hover table-striped">
+    <thead class="table-light">
+      <tr>
+        <th>Usuario</th>
+        <th>Modelo usado</th>
+        <th>Inicio</th>
+        <th>Fin</th>
+        <th>Duración</th>
+      </tr>
+    </thead>
+    <tbody id="tabla-actividad">
+      <!-- Datos se llenan dinámicamente -->
+    </tbody>
+  </table>
+</div>
+
+<script>
+  // Obtener datos del backend
+  window.onload = () => {
+    fetch('/api/usuarios')
+      .then(res => res.json())
+      .then(data => {
+        const tabla = document.getElementById('tabla-usuarios');
+        tabla.innerHTML = "";
+        data.forEach(user => {
+          tabla.innerHTML += `
+            <tr>
+              <td>${user.id}</td>
+              <td>${user.nombre}</td>
+              <td>${user.email}</td>
+              <td>${user.rol}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-danger" onclick="eliminarUsuario(${user.id})">Eliminar</button>
+              </td>
+            </tr>
+          `;
+        });
+      });
+
+    fetch('/api/actividad')
+      .then(res => res.json())
+      .then(data => {
+        const tabla = document.getElementById('tabla-actividad');
+        tabla.innerHTML = "";
+        data.forEach(log => {
+          tabla.innerHTML += `
+            <tr>
+              <td>${log.usuario}</td>
+              <td>${log.modelo}</td>
+              <td>${log.inicio}</td>
+              <td>${log.fin}</td>
+              <td>${log.duracion} s</td>
+            </tr>
+          `;
+        });
+      });
+  };
+
+  function eliminarUsuario(id) {
+    if (!confirm("¿Estás seguro de que deseas eliminar este usuario?")) return;
+
+    fetch(`/api/eliminar_usuario/${id}`, {
+      method: 'DELETE'
+    })
+    .then(res => res.json())
+    .then(data => {
+      alert(data.mensaje);
+      location.reload();
+    });
+  }
+</script>
+
+</body>
+</html>

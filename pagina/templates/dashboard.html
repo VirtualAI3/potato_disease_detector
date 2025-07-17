@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Detección de Enfermedades - Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: #f2f6fc;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    video,
+    canvas {
+      width: 100%;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    #resultado {
+      padding: 15px;
+      background-color: #e3f2fd;
+      border-left: 5px solid #2196f3;
+      margin-top: 20px;
+      border-radius: 5px;
+    }
+
+    .modelo-info {
+      font-size: 0.9em;
+      color: #555;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .card {
+      border: none;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .nav-tabs {
+      border-bottom: none;
+    }
+
+    .nav-link {
+      border-radius: 8px;
+      margin: 0 5px;
+      color: #555;
+      font-weight: 500;
+    }
+
+    .nav-link.active {
+      background-color: #e3f2fd;
+      color: #0d47a1 !important;
+      font-weight: bold;
+      box-shadow: inset 0 -2px 0 #0d47a1;
+    }
+
+
+    .tab-content {
+      padding: 20px;
+      background: white;
+      border-radius: 0 0 10px 10px;
+    }
+
+    .btn {
+      transition: all 0.3s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+
+    #imagen-capturada {
+      max-width: 200px;
+      max-height: 150px;
+      margin-top: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>Detector de Enfermedades en Papa</h2>
+      <a href="/logout" class="btn btn-outline-danger btn-sm">Cerrar sesión</a>
+    </div>
+
+    <!-- Mostrar Cámara -->
+    <div class="mb-4">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas" style="display: none;"></canvas>
+    </div>
+
+    <!-- Selección de modelo -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <select class="form-select" id="modelo"></select>
+        <div class="modelo-info mt-2" id="modelo-descripcion">
+          <strong>Descripción:</strong> <span id="descripcion-texto">Seleccione un modelo</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resultado -->
+    <div id="resultado" class="mt-4" style="display: none;">
+      <strong>Resultado:</strong> <span id="resultado-texto"></span>
+    </div>
+
+    <!-- Tabs para cambiar entre modos -->
+    <div class="card">
+      <ul class="nav nav-tabs">
+        <li class="nav-item">
+          <a class="nav-link active" id="captura-tab" data-bs-toggle="tab" href="#captura">Captura Única</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" id="en-vivo-tab" data-bs-toggle="tab" href="#en-vivo">Detección en Vivo</a>
+        </li>
+      </ul>
+      <div class="tab-content">
+        <!-- Captura Única -->
+        <div class="tab-pane fade show active" id="captura">
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary flex-fill" onclick="capturar()">Capturar Imagen</button>
+            <button class="btn btn-success flex-fill" onclick="enviarDeteccion()">Detectar Enfermedad</button>
+          </div>
+
+          <div id="preview-container" class="mt-3 text-center" style="display: none;">
+            <strong>Imagen Capturada:</strong><br>
+            <img id="imagen-capturada" src="" alt="Captura">
+          </div>
+        </div>
+        <!-- Detección en Vivo -->
+        <div class="tab-pane fade" id="en-vivo">
+          <div class="d-flex gap-2">
+            <button class="btn btn-success flex-fill" id="btn-iniciar" onclick="iniciarDeteccionEnVivo()">Iniciar
+              Detección en Vivo</button>
+            <button class="btn btn-danger flex-fill" id="btn-detener" onclick="detenerDeteccionEnVivo()"
+              disabled>Detener Detección en Vivo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const resultado = document.getElementById('resultado');
+    const resultadoTexto = document.getElementById('resultado-texto');
+    const modeloSelect = document.getElementById('modelo');
+    const descripcionTexto = document.getElementById('descripcion-texto');
+    const btnIniciar = document.getElementById('btn-iniciar');
+    const btnDetener = document.getElementById('btn-detener');
+
+    let deteccionEnVivoInterval = null;
+
+    // Cargar modelos dinámicamente desde backend
+    function cargarModelos() {
+      fetch('/api/modelos')
+        .then(res => res.json())
+        .then(modelos => {
+          modeloSelect.innerHTML = '';
+          modelos.forEach(m => {
+            const option = document.createElement('option');
+            option.value = m.id;
+            option.textContent = m.nombre;
+            option.dataset.descripcion = m.descripcion || '';
+            modeloSelect.appendChild(option);
+          });
+          actualizarDescripcion();
+        })
+        .catch(err => {
+          console.error('Error cargando modelos:', err);
+          modeloSelect.innerHTML = '<option value="">Error cargando modelos</option>';
+        });
+    }
+
+    // Actualiza descripción cuando cambia el modelo seleccionado
+    function actualizarDescripcion() {
+      const opcion = modeloSelect.selectedOptions[0];
+      descripcionTexto.textContent = opcion ? opcion.dataset.descripcion : 'Seleccione un modelo';
+    }
+
+    // Detectar cuando cambia el select
+    modeloSelect.addEventListener('change', () => {
+      actualizarDescripcion();
+    });
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        console.warn("Cámara trasera no disponible. Usando cámara por defecto.", err);
+        return navigator.mediaDevices.getUserMedia({ video: true });
+      })
+      .then(stream => {
+        if (stream) {
+          video.srcObject = stream;
+        }
+      })
+      .catch(error => {
+        alert("No se pudo acceder a la cámara: " + error.message);
+      });
+
+    // Capturar imagen estática
+    function capturar() {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const contexto = canvas.getContext('2d');
+      contexto.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Mostrar como miniatura
+      const imgPreview = document.getElementById('imagen-capturada');
+      const previewContainer = document.getElementById('preview-container');
+      canvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        imgPreview.src = url;
+        previewContainer.style.display = "block";
+      }, 'image/jpeg');
+    }
+
+
+    // Enviar imagen capturada al backend
+    function enviarDeteccion() {
+      const modelo = modeloSelect.value;
+      canvas.toBlob(blob => {
+        const formData = new FormData();
+        formData.append('imagen', blob, 'captura.jpg');
+        formData.append('modelo', modelo);
+
+        fetch('/detectar', {
+          method: 'POST',
+          body: formData
+        })
+          .then(res => res.json())
+          .then(data => {
+            resultado.style.display = "block";
+            resultadoTexto.textContent = data.resultado || "No se pudo clasificar la imagen.";
+          })
+          .catch(err => {
+            resultado.style.display = "block";
+            resultadoTexto.textContent = "Error al procesar la imagen.";
+            console.error(err);
+          });
+      }, 'image/jpeg');
+    }
+
+    // Enviar frame para detección en vivo (cada 2 seg)
+    function enviarFrame() {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob(blob => {
+          const formData = new FormData();
+          formData.append('imagen', blob, 'frame.jpg');
+          formData.append('modelo', modeloSelect.value);
+
+          fetch('/detectar', {
+            method: 'POST',
+            body: formData
+          })
+            .then(res => res.json())
+            .then(data => {
+              resultado.style.display = "block";
+              resultadoTexto.textContent = data.resultado || "No se pudo clasificar la imagen.";
+            })
+            .catch(err => {
+              console.error(err);
+            });
+        }, 'image/jpeg');
+      }
+    }
+
+    // Iniciar detección en vivo (intervalo cada 2 segundos)
+    function iniciarDeteccionEnVivo() {
+      const modelo = modeloSelect.value;
+      fetch('/iniciar_sesion_deteccion', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `modelo=${encodeURIComponent(modelo)}`
+      })
+        .then(res => res.json())
+        .then(data => {
+          console.log(data.mensaje);
+          deteccionEnVivoInterval = setInterval(enviarFrame, 2000);
+          btnIniciar.disabled = true;
+          btnDetener.disabled = false;
+        })
+        .catch(err => {
+          console.error('Error al iniciar sesión de detección:', err);
+        });
+    }
+
+    // Detener detección en vivo
+    function detenerDeteccionEnVivo() {
+      if (deteccionEnVivoInterval) {
+        clearInterval(deteccionEnVivoInterval);
+        deteccionEnVivoInterval = null;
+        fetch('/finalizar_sesion_deteccion', {
+          method: 'POST'
+        })
+          .then(res => res.json())
+          .then(data => {
+            console.log(data.mensaje);
+            btnIniciar.disabled = false;
+            btnDetener.disabled = true;
+          })
+          .catch(err => {
+            console.error('Error al finalizar sesión de detección:', err);
+          });
+      }
+    }
+
+    // Cargar modelos cuando carga la página
+    window.onload = () => {
+      cargarModelos();
+    };
+  </script>
+</body>
+
+</html>
